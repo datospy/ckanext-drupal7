@@ -1,17 +1,16 @@
 import logging
 import uuid
 import hashlib
-import re
 
 import sqlalchemy as sa
+import re
 
 import ckan.plugins as p
 import ckan.lib.base as base
 import ckan.logic as logic
 import ckan.lib.helpers as h
 
-log = logging.getLogger('ckanext.drupal7')
-
+log = logging.getLogger('ckanext.saml2')
 
 def sanitize_drupal_username(name):
     """Convert a drupal username (which can have spaces and other special characters) into a form that is valid in CKAN
@@ -25,6 +24,7 @@ def sanitize_drupal_username(name):
     # remove leading or trailing hyphens
     name = name.strip('-')[:99]
     return name
+
 
 
 def _no_permissions(context, msg):
@@ -73,7 +73,6 @@ class Drupal7Plugin(p.SingletonPlugin):
     def get_domain(self):
         return self.domain
 
-    @staticmethod
     def update_config(self, config):
         p.toolkit.add_template_directory(config, 'templates')
 
@@ -85,18 +84,16 @@ class Drupal7Plugin(p.SingletonPlugin):
         if not (self.domain and self.sysadmin_role and self.connection):
             raise Exception('Drupal7 extension has not been configured')
 
-    @staticmethod
-    def before_map(map):
+    def before_map(self, map):
         map.connect(
             'drupal7_unauthorized',
             '/drupal7_unauthorized',
-            controller='ckanext.vicdata.drupal_plugin:Drupal7Controller',
+            controller='ckanext.drupal7.plugin:Drupal7Controller',
             action='unauthorized'
         )
         return map
 
-    @staticmethod
-    def make_password():
+    def make_password(self):
         # create a hard to guess password
         out = ''
         for n in xrange(8):
@@ -107,7 +104,6 @@ class Drupal7Plugin(p.SingletonPlugin):
         server_name = self.domain or p.toolkit.request.environ['SERVER_NAME']
         session_name = 'SESS%s' % hashlib.sha256(server_name).hexdigest()[:32]
         self.drupal_session_name = session_name
-
     def is_sysadmin(self, user_data):
         return user_data.role_name == self.sysadmin_role
 
@@ -140,6 +136,7 @@ class Drupal7Plugin(p.SingletonPlugin):
                     self.user(row)
                     break
 
+
     def user(self, user_data):
         try:
             user = p.toolkit.get_action('user_show')(
@@ -171,16 +168,15 @@ class Drupal7Plugin(p.SingletonPlugin):
             user = p.toolkit.get_action('user_create')({'ignore_auth': True}, user)
         p.toolkit.c.user = user['name']
 
-    @staticmethod
-    def abort(status_code, detail, headers, comment):
+    def abort(self, status_code, detail, headers, comment):
         # HTTP Status 401 causes a login redirect.  We need to prevent this
         # unless we are actually trying to login.
-        if status_code == 401 and p.toolkit.request.environ['PATH_INFO'] != '/user/login':
+        if (status_code == 401
+            and p.toolkit.request.environ['PATH_INFO'] != '/user/login'):
                 h.redirect_to('drupal7_unauthorized')
-        return status_code, detail, headers, comment
+        return (status_code, detail, headers, comment)
 
-    @staticmethod
-    def get_auth_functions():
+    def get_auth_functions(self):
         # we need to prevent some actions being authorized.
         return {
             'user_create': user_create,
@@ -192,10 +188,9 @@ class Drupal7Plugin(p.SingletonPlugin):
 
 class Drupal7Controller(base.BaseController):
 
-    @staticmethod
-    def unauthorized():
+    def unauthorized(self):
         # This is our you are not authorized page
         c = p.toolkit.c
         c.code = 401
-        c.content = p.toolkit._('You are not authorized to do this')
+        c.content = p.toolkit._('No tienes permisos para realizar esto.')
         return p.toolkit.render('error_document_template.html')
